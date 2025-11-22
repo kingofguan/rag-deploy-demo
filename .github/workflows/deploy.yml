@@ -1,77 +1,83 @@
-name: Deploy RAG App to AWS App Runner
+name: Deploy RAG app to AWS App Runner
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
-
-env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-  APP_RUNNER_SERVICE_NAME: bee-edu-rag-service
 
 jobs:
   deploy:
-    name: Build and Deploy
     runs-on: ubuntu-latest
-    
+
     permissions:
-      id-token: write
+      id-token: write    # OIDC
       contents: read
-    
+
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+      APP_RUNNER_ARN: ${{ secrets.APP_RUNNER_ARN }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-      # Step 1: Configure AWS Credentials using OIDC
-      - name: Configure AWS Credentials
+
+      - name: Configure AWS credentials (OIDC)
+        id: aws-creds
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_IAM_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-session-name: GitHubActions-Deploy
-      
-      # Step 2: Log in to Amazon ECR
+          aws-region: ${{ secrets.AWS_REGION }}
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-      
-      # Step 3: Build and push Docker image
+
       - name: Build, tag, and push image to Amazon ECR
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
           echo "Building Docker image..."
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          
-          echo "Pushing image to ECR..."
+          docker build --platform linux/amd64 -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          echo "Pushing Docker image to ECR..."
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-      
-      # Step 4: Deploy to AWS App Runner
-      - name: Deploy to App Runner
+
+      - name: Get App Runner roles (access & instance)
+        id: apprunner-roles
+        run: |
+          echo "Describing App Runner service..."
+          ACCESS_ROLE_ARN=$(aws apprunner describe-service \
+            --service-arn "${APP_RUNNER_ARN}" \
+            --query 'Service.SourceConfiguration.AuthenticationConfiguration.AccessRoleArn' \
+            --output text)
+
+          INSTANCE_ROLE_ARN=$(aws apprunner describe-service \
+            --service-arn "${APP_RUNNER_ARN}" \
+            --query 'Service.InstanceConfiguration.InstanceRoleArn' \
+            --output text)
+
+          echo "access_role_arn=${ACCESS_ROLE_ARN}"
+          echo "instance_role_arn=${INSTANCE_ROLE_ARN}"
+
+          echo "access_role_arn=${ACCESS_ROLE_ARN}" >> $GITHUB_OUTPUT
+          echo "instance_role_arn=${INSTANCE_ROLE_ARN}" >> $GITHUB_OUTPUT
+
+      - name: Deploy to AWS App Runner (image-based)
         id: deploy-apprunner
         uses: awslabs/amazon-app-runner-deploy@main
         with:
-          service: ${{ env.APP_RUNNER_SERVICE_NAME }}
+          service: ${{ env.APP_RUNNER_ARN }}
           image: ${{ steps.build-image.outputs.image }}
-          access-role-arn: ${{ secrets.ACCESS_ROLE_ARN }}
-          runtime: PYTHON3
+          access-role-arn: ${{ steps.apprunner-roles.outputs.access_role_arn }}
+          instance-role-arn: ${{ steps.apprunner-roles.outputs.instance_role_arn }}
           region: ${{ env.AWS_REGION }}
           cpu: 1
           memory: 2
-          port: 8080
           wait-for-service-stability-seconds: 600
-          copy-env-vars: |
-            OPENAI_API_KEY
-      
-      - name: App Runner URL
-        run: |
-          echo "App successfully deployed!"
-          echo "Service URL: ${{ steps.deploy-apprunner.outputs.service-url }}"
+
+      - name: Print App Runner URL
+        run: echo "App Runner URL = ${{ steps.deploy-apprunner.outputs.service-url }}"
