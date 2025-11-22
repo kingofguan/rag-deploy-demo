@@ -1,0 +1,17 @@
+# Terraform Variables Configuration
+# Copy this file to terraform.tfvars and fill in your values
+
+# Your GitHub username or organization name
+github_org_or_user = "kingofguan"
+
+# Your GitHub repository name
+github_repo_name = "rag-deploy-demo"
+
+# OpenAI API Key (required for RAG application)
+# Get your API key from https://platform.openai.com/api-keys
+openai_api_key = "sk-..."
+
+# Whether to manage App Runner service via Terraform
+# Set to false to let GitHub Actions create/update the service
+manage_apprunner_via_terraform = false
+

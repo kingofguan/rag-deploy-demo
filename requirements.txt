@@ -1,0 +1,28 @@
+# Flask web framework
+Flask
+Flask-CORS
+Werkzeug
+
+# LangChain (pin to a compatible set)
+langchain
+langchain-core
+langchain-openai
+langchain-community
+langchain-text-splitters
+
+# FAISS for vector storage
+faiss-cpu
+
+# OpenAI API
+openai
+
+# PDF processing – keep only pypdf
+pypdf
+
+# Additional utilities
+tiktoken
+numpy
+requests
+
+# Production server
+gunicorn

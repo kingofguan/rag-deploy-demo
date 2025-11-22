@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>W501 RAG Application - CS336 Q&A</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎓 CS336 Assignment 1 Q&A System</h1>
+            <p class="subtitle">Powered by LangChain & FAISS</p>
+            <div class="status-indicator" id="statusIndicator">
+                <span class="status-dot"></span>
+                <span id="statusText">Checking status...</span>
+            </div>
+        </header>
+
+        <main>
+            <div class="chat-container">
+                <div class="messages" id="messages">
+                    <div class="welcome-message">
+                        <h2>Welcome to the CS336 Assignment 1 Q&A System! 👋</h2>
+                        <p>Ask me anything about the CS336 Spring 2025 Assignment 1 Basics document.</p>
+                        <div class="example-questions">
+                            <h3>Example questions:</h3>
+                            <ul>
+                                <li>"What is the main topic of the assignment?"</li>
+                                <li>"What are the requirements for this assignment?"</li>
+                                <li>"What concepts are covered in the document?"</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-container">
+                    <textarea 
+                        id="questionInput" 
+                        placeholder="Type your question here..." 
+                        rows="3"
+                        onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendQuestion(); }"
+                    ></textarea>
+                    <button id="sendButton" onclick="sendQuestion()">
+                        <span id="buttonText">Send</span>
+                        <span id="buttonSpinner" class="spinner" style="display: none;"></span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <h3>System Information</h3>
+                <div id="systemInfo">
+                    <p>Loading...</p>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>W501 Homework - GitHub → Docker → AWS App Runner → Cloudflare Pipeline</p>
+            <p class="tech-stack">Tech Stack: LangChain | FAISS | OpenAI | Flask | Terraform | GitHub Actions</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
