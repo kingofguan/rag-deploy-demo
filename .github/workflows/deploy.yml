@@ -17,6 +17,7 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
       APP_RUNNER_ARN: ${{ secrets.APP_RUNNER_ARN }}
+      APP_RUNNER_SERVICE_NAME: ${{ secrets.APP_RUNNER_SERVICE_NAME }}
 
     steps:
       - name: Checkout code
@@ -60,9 +61,6 @@ jobs:
             --query 'Service.InstanceConfiguration.InstanceRoleArn' \
             --output text)
 
-          echo "access_role_arn=${ACCESS_ROLE_ARN}"
-          echo "instance_role_arn=${INSTANCE_ROLE_ARN}"
-
           echo "access_role_arn=${ACCESS_ROLE_ARN}" >> $GITHUB_OUTPUT
           echo "instance_role_arn=${INSTANCE_ROLE_ARN}" >> $GITHUB_OUTPUT
 
@@ -70,7 +68,8 @@ jobs:
         id: deploy-apprunner
         uses: awslabs/amazon-app-runner-deploy@main
         with:
-          service: ${{ env.APP_RUNNER_ARN }}
+          # 这里用「服务名」，不是 ARN
+          service: ${{ env.APP_RUNNER_SERVICE_NAME }}
           image: ${{ steps.build-image.outputs.image }}
           access-role-arn: ${{ steps.apprunner-roles.outputs.access_role_arn }}
           instance-role-arn: ${{ steps.apprunner-roles.outputs.instance_role_arn }}
