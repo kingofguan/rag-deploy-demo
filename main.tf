@@ -225,6 +225,11 @@ resource "aws_apprunner_service" "rag_app_service" {
     }
     auto_deployments_enabled = false # 我们用 GitHub Actions 手动触发
   }
+  health_check_configuration {
+    protocol = "TCP"      # or "HTTP"
+    # port     = "8080"     # <<< MATCH
+    # path = "/health"    # only if HTTP
+  }
   instance_configuration {
     cpu    = "1024" # 1 vCPU
     memory = "2048" # 2 GB
