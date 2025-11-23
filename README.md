@@ -54,6 +54,24 @@ This project fulfills all W501 homework requirements:
 4. **Terraform** installed: https://www.terraform.io/downloads
 5. **Cloudflare Account** with domain `spark-amplify.com`
 
+### Prepare the FAISS index (one-time)
+
+Before running the Flask app or building the Docker image you must materialize the
+vector database. This replaces the previous startup routine that read and
+chunked the PDF on every boot.
+
+```bash
+export OPENAI_API_KEY=sk-...
+python build_faiss_index.py \
+    --pdf cs336_spring2025_assignment1_basics.pdf \
+    --index-dir faiss_index
+```
+
+This command writes `index.faiss` and `index.pkl` into `faiss_index/`. Commit or
+copy those files alongside the app so App Runner can load them. To use a
+different location, set the `FAISS_INDEX_DIR` environment variable for both the
+builder and the runtime.
+
 ### Step-by-Step Deployment
 
 #### 1️⃣ Configure Terraform Variables
@@ -134,7 +152,9 @@ w501-homework/
 │   ├── index.html              # Frontend UI
 │   ├── script.js               # Frontend logic
 │   └── styles.css              # Styling
+├── build_faiss_index.py        # Offline utility to create the FAISS index
 ├── app.py                      # Flask application with RAG logic
+├── faiss_index/                # Persisted FAISS files (index.faiss / index.pkl)
 ├── Dockerfile                  # Container configuration
 ├── requirements.txt            # Python dependencies
 ├── main.tf                     # Terraform infrastructure
@@ -152,12 +172,15 @@ w501-homework/
 
 ### RAG Pipeline
 
+**Offline indexing (run via `build_faiss_index.py`):**
 1. **Document Loading**: Extracts text from `cs336_spring2025_assignment1_basics.pdf`
 2. **Text Splitting**: Chunks text into 1000-character segments with 200-char overlap
 3. **Embedding**: Creates vector embeddings using OpenAI's embedding model
-4. **Vector Storage**: Stores embeddings in FAISS for similarity search
-5. **Retrieval**: Finds top 3 most relevant chunks for each query
-6. **Generation**: Uses GPT-3.5-turbo to generate answer based on retrieved context
+4. **Vector Storage**: Persists embeddings in FAISS (`faiss_index/`)
+
+**Online inference (Flask app runtime):**
+5. **Retrieval**: Loads the saved FAISS index and finds top 3 relevant chunks
+6. **Generation**: Uses GPT-3.5-turbo to answer the question using retrieved context
 
 ### CI/CD Pipeline
 
@@ -311,12 +334,14 @@ aws secretsmanager get-secret-value --secret-id bee-edu-openai-key-secret
 **Problem:** "Error processing question"
 
 **Solution:**
-1. Verify PDF is in Docker image:
+1. Verify FAISS artifacts exist in the container/image:
 ```bash
-docker run <image-id> ls -la cs336_spring2025_assignment1_basics.pdf
+docker run <image-id> ls -la faiss_index/index.faiss
 ```
-2. Check OpenAI API key is valid
-3. Review Flask logs in App Runner
+2. Rebuild the index locally with `python build_faiss_index.py --force` and redeploy
+3. Ensure `FAISS_INDEX_DIR` matches the path copied into the image
+4. Check OpenAI API key is valid
+5. Review Flask logs in App Runner
 
 ### Cloudflare DNS Issues
 

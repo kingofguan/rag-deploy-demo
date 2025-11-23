@@ -20,6 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 COPY cs336_spring2025_assignment1_basics.pdf .
 COPY static/ ./static/
+COPY faiss_index/ ./faiss_index/
 
 # Create a non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app

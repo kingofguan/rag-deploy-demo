@@ -1,18 +1,17 @@
 """
 RAG Application for W501 Homework
-Uses LangChain and FAISS to answer questions about cs336_spring2025_assignment1_basics.pdf
+Uses LangChain and a pre-built FAISS index to answer questions about the
+CS336 Spring 2025 Assignment 1 Basics document.
 """
 
 import os
 import logging
+import traceback
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
-from langchain_community.document_loaders import PyPDFLoader
-import traceback
 
 # Configure logging
 logging.basicConfig(
@@ -29,7 +28,11 @@ app = Flask(
 )
 CORS(app)
 
-# Global variables
+# Global configuration
+FAISS_INDEX_DIR = os.environ.get("FAISS_INDEX_DIR", "faiss_index")
+REQUIRED_INDEX_FILES = ("index.faiss", "index.pkl")
+
+# Global state
 vectorstore = None
 qa_chain = None
 
@@ -72,8 +75,27 @@ class SimpleRetrievalQA:
             "source_documents": source_docs,
         }
 
+def _validate_index_directory(index_dir: str):
+    """Ensure the FAISS index directory exists and contains required files."""
+    if not os.path.isdir(index_dir):
+        raise FileNotFoundError(
+            f"FAISS index directory not found: '{index_dir}'. "
+            "Please generate it first using build_faiss_index.py."
+        )
+
+    missing_files = [
+        fname for fname in REQUIRED_INDEX_FILES
+        if not os.path.exists(os.path.join(index_dir, fname))
+    ]
+    if missing_files:
+        raise FileNotFoundError(
+            f"FAISS index directory '{index_dir}' is missing files: {missing_files}. "
+            "Re-run build_faiss_index.py or ensure the directory was copied correctly."
+        )
+
+
 def initialize_qa_system():
-    """Initialize the QA system with FAISS and LangChain"""
+    """Initialize the QA system by loading the persisted FAISS index."""
     global vectorstore, qa_chain
     
     logger.info("=" * 60)
@@ -85,34 +107,19 @@ def initialize_qa_system():
     if not openai_api_key:
         raise ValueError("OPENAI_API_KEY environment variable is not set")
     
-    # Check if PDF exists
-    pdf_path = "cs336_spring2025_assignment1_basics.pdf"
-    if not os.path.exists(pdf_path):
-        error_msg = f"CRITICAL: PDF file not found: {pdf_path}"
-        logger.error(error_msg)
-        raise FileNotFoundError(error_msg)
-    
-    # Load PDF using PyPDFLoader
-    logger.info(f"Loading PDF: {pdf_path}")
-    loader = PyPDFLoader(pdf_path)
-    documents = loader.load()
-    logger.info(f"✅ Successfully loaded {len(documents)} pages from PDF")
-    
-    # Split documents into chunks
-    logger.info("Splitting documents into chunks...")
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200,
-        length_function=len,
-    )
-    chunks = text_splitter.split_documents(documents)
-    logger.info(f"✅ Split into {len(chunks)} text chunks")
-    
-    # Create embeddings and FAISS vectorstore
-    logger.info(f"Creating vector embeddings for {len(chunks)} chunks (this may take 10-30 seconds)...")
+    # Validate FAISS index
+    logger.info(f"Looking for FAISS index at: {FAISS_INDEX_DIR}")
+    _validate_index_directory(FAISS_INDEX_DIR)
+
+    # Create embeddings and load FAISS vectorstore
+    logger.info("Loading FAISS vectorstore from disk...")
     embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
-    vectorstore = FAISS.from_documents(chunks, embeddings)
-    logger.info("✅ FAISS vectorstore created successfully!")
+    vectorstore = FAISS.load_local(
+        FAISS_INDEX_DIR,
+        embeddings,
+        allow_dangerous_deserialization=True,  # Required for pickle metadata
+    )
+    logger.info("✅ FAISS vectorstore loaded successfully!")
     
     # Create QA chain
     logger.info("Setting up QA chain with GPT-3.5-turbo...")
@@ -150,13 +157,27 @@ def index():
     """Serve the main page"""
     return render_template('index.html')
 
+@app.before_request
+def ensure_qa_ready():
+    """Gunicorn/production hook to load the QA system once per worker."""
+    if qa_chain is None:
+        logger.info("QA system not initialized yet; loading before serving requests...")
+        initialize_qa_system()
+
+
 @app.route('/health')
 def health():
     """Health check endpoint"""
+    index_files_present = all(
+        os.path.exists(os.path.join(FAISS_INDEX_DIR, fname))
+        for fname in REQUIRED_INDEX_FILES
+    )
     return jsonify({
         "status": "healthy",
         "vectorstore_initialized": vectorstore is not None,
-        "qa_chain_initialized": qa_chain is not None
+        "qa_chain_initialized": qa_chain is not None,
+        "faiss_index_dir": FAISS_INDEX_DIR,
+        "faiss_index_files_present": index_files_present,
     })
 
 @app.route('/api/ask', methods=['POST'])
