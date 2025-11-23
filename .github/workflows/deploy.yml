@@ -77,7 +77,7 @@ jobs:
           port: 8080
           cpu: 1
           memory: 2
-          wait-for-service-stability-seconds: 600
+          wait-for-service-stability-seconds: 300
 
       - name: Print App Runner URL
         run: echo "App Runner URL = ${{ steps.deploy-apprunner.outputs.service-url }}"
