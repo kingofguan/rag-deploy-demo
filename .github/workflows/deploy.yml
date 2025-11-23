@@ -74,6 +74,7 @@ jobs:
           access-role-arn: ${{ steps.apprunner-roles.outputs.access_role_arn }}
           instance-role-arn: ${{ steps.apprunner-roles.outputs.instance_role_arn }}
           region: ${{ env.AWS_REGION }}
+          port: 8080
           cpu: 1
           memory: 2
           wait-for-service-stability-seconds: 600
